@@ -359,11 +359,47 @@ int64_t writeResolveRecord(FILE *f, int64_t offsetField, const string &text)
 {
     // writes one [offset(8B)][size(4B)][string] record at the current file position
     // returns this record's own starting byte position
+    int64_t recordStart = ftell(f);
+    int32_t stringSize = text.length();
+
+    fwrite(&offsetField, sizeof(int64_t), 1, f);
+    fwrite(&stringSize, sizeof(int32_t), 1, f);
+    fwrite(text.c_str(), 1, stringSize, f);
+
+    return recordStart;
 }
+
 int64_t readResolveRecord(FILE *f, string &outText)
 {
     // reads one record at the current position and advances past it, returns the offset field - the raw line text comes back untouched in outText.
+    int64_t offsetField;
+    int32_t stringSize;
+
+    if (fread(&offsetField, sizeof(int64_t), 1, f) != 1)
+    {
+        return -1;
+    }
+
+    if (fread(&stringSize, sizeof(int32_t), 1, f) != 1)
+    {
+        return -1;
+    }
+
+    outText = "";
+    for (int i = 0; i < stringSize; i++)
+    {
+        char ch;
+        if (fread(&ch, sizeof(char), 1, f) != 1)
+        {
+            return -1;
+        }
+
+        outText += 1;
+    }
+
+    return offsetField; 
 }
+
 int64_t resolveProgram(const char *sourcePath, const char *resolveBinPath)
 {
     FuncEntry funcArray[MAX_FUNCS];
@@ -378,6 +414,101 @@ int64_t resolveProgram(const char *sourcePath, const char *resolveBinPath)
     // with its target's position. Patching happens after the full write
     // Returns the byte offset of main's FUNC header record.
     // if there is no main return the error 
+
+    ifstream source(sourcePath);
+    if (!source.is_open())
+    {
+        cout << "Error: Could not open source file." << endl;
+        return -1;
+    }
+
+    FILE* resolveFile = fopen(resolveBinPath, "wb+");
+
+    if (resolveFile == nullptr)
+    {
+        cout << "Error: Could not create resolve.bin." << endl;
+        return -1;
+    }
+
+    string line;
+    int64_t mainOffset = -1;
+
+    // write every line into resolve.bin
+    while (readSourceLine(source, line))
+    {
+        int64_t recordStart = ftell(resolveFile);
+        writeResolveRecord(resolveFile, recordStart, line);
+        string keyword = firstWord(line);
+
+        if (keyword == "func")
+        {
+            string functionName = secondWord(line);
+
+            if (funcCount >= MAX_FUNCS)
+            {
+                cout << "Error: Too many functions." << endl;
+                fclose(resolveFile);
+                return -1;
+            }
+
+            funcArray[funcCount].funcName = functionName;
+            funcArray[funcCount].byteOffsetInResolveBin = recordStart;
+            funcCount++;
+
+            if (functionName == "main")
+            {
+                mainOffset = recordStart;
+            }
+        }
+        else if (keyword == "call")
+        {
+            if (patchCount >= MAX_PATCHES)
+            {
+                cout << "Error: Too many function calls." << endl;
+                fclose(resolveFile);
+                return -1;
+            }
+
+            patches[patchCount].byteOffsetOfOffsetField = recordStart;
+            patches[patchCount].targetFuncName = secondWord(line);
+            patchCount++;
+        }
+    }
+
+    // main should exist
+    if (mainOffset == -1)
+    {
+        cout << "Error: main function not found." << endl;
+        fclose(resolveFile);
+        return -1;
+    }
+
+    // fix all call offset
+    for (int i = 0; i < patchCount; i++)
+    {
+        int64_t targetOffset = -1;
+        for (int j = 0; j < funcCount; j++)
+        {
+            if (patches[i].targetFuncName == funcArray[j].funcName)
+            {
+                targetOffset = funcArray[j].byteOffsetInResolveBin;
+                break;
+            }
+        }
+
+        if (targetOffset == -1)
+        {
+            cout << "Error: Undefined function " << patches[i].targetFuncName << endl;
+            fclose(resolveFile);
+            return -1;
+        }
+
+        fseek(resolveFile, patches[i].byteOffsetOfOffsetField, SEEK_SET);
+        fwrite(&targetOffset, sizeof(int64_t), 1, resolveFile);
+    }
+
+    fclose(resolveFile);
+    return mainOffset;
 }
 
 // PASS 0x2: EXECUTION (tokenization happens here)
@@ -387,22 +518,27 @@ enum TokenType
     IDENTIFIER,
     PARAM
 };
+
 struct Token
 {
     TokenType type;
     string text;
 };
+
 int32_t tokenizeLine(const string &line, Token tokens[], int32_t maxTokens)
 {
     // first word is always a instruction keyword
     // instruction set = [func, func_end, call, set, add, sub, mul and div]
     // next word is identifier like name of a function, variable name
     // after identifier all are the params/arg, space separated
+
 }
+
 Snapshot *buildSnapshot(Stack<Frame> &callStack)
 {
     // build the snapshot based on the callStack given
 }
+
 void executeProgram(const char *resolveBinPath, int64_t mainOffset, Timeline &timeline)
 {
     // initialize the call stack

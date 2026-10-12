@@ -30,12 +30,15 @@ Project setup and preparation for Phase 01 implementation.
 - Implemented Pass 0x0 helper functions for reading nonblank lines and extracting instruction words.
 - Implemented program validation for func / func_end matching.
 - Added checks for nested function declarations, unmatched func_end, missing func_end, and missing function names.
+- Implemented Pass 0x1 resolve record writing and reading.
+- Added function offset bookkeeping and pending CALL patching.
+- Added detection for missing main and undefined function calls.
+- Verified that CALL records are patched with the correct function offsets.
 
 ### Current Stage
-Pass 0x0 validation completed.
+Pass 0x1 resolve completed.
 
 ### Next Steps
-- Implement Pass 0x1 resolve record writing and reading.
-- Store function names and their offsets.
-- Store pending call patches.
-- Detect missing main and undefined function calls.
+- Implement Pass 0x2 tokenization.
+- Build snapshots from the call stack.
+- Implement instruction execution and function calls.
