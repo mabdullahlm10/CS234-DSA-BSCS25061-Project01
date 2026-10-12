@@ -216,18 +216,142 @@ struct PendingPatch
 bool readSourceLine(ifstream &in, string &out)
 {
     // reads the next nonblank line
+    while (getline(in, out))
+    {
+        bool hasText = false;
+
+        for (int i = 0; i < out.length(); i++)
+        {
+            if (out[i] != ' ' && out[i] != '\t' && out[i] != '\r')
+            {
+                hasText = true;
+                break;
+            }
+        }
+
+        if (hasText) { return true; }
+    }
+
+    return false;
 }
+
 string firstWord(const string &line)
 {
     // returns first word from the input string
+    int i = 0;
+    
+    // skips spaces till first word
+    while (i < line.length() && (line[i] == ' ' || line[i] == '\t' || line[i] == '\r'))
+    {
+        i++;
+    }
+
+    string word = "";
+    // read first word
+    while (i < line.length() && line[i] != ' ' && line[i] != '\t' && line[i] != '\r')
+    {
+        word += line[i];
+        i++;
+    }
+
+    return word;
 }
+
 string secondWord(const string &line)
 {
     // returns the second word
+    int i = 0;
+
+    // skips spaces till first word
+    while (i < line.length() && (line[i] == ' ' || line[i] == '\t' || line[i] == '\r'))
+    {
+        i++;
+    }
+
+    // skip first word
+    while (i < line.length() && line[i] != ' ' && line[i] != '\t' && line[i] != '\r')
+    {
+        i++;
+    }
+
+    // skip spaces bw first and second
+    while (i < line.length() && (line[i] == ' ' || line[i] == '\t' || line[i] == '\r'))
+    {
+        i++;
+    }
+
+    string word = "";
+    
+    // read second
+    while (i < line.length() && line[i] != ' ' && line[i] != '\t' && line[i] != '\r')
+    {
+        word += line[i];
+        i++;
+    }
+
+    return word;
 }
+
 bool validateProgram(const char *sourcePath)
 {
     // for each func defined there should be exactly one func_end and no nested funcs allowed - 
+    ifstream source(sourcePath);
+
+    if (!source.is_open())
+    {
+        cout << "Error: Could not open source file." << endl;
+        return false;
+    }
+
+    Stack<string> functionStack;
+    string line;
+
+    while (readSourceLine(source, line))
+    {
+        string keyword = firstWord(line);
+
+        if (keyword == "func")
+        {
+            string functionName = secondWord(line);
+
+            // func must have a name
+            if (functionName == "")
+            {
+                cout << "Error: Function name missing." << endl;
+                return false;
+            }
+
+            // nested functions are not allowed
+            if (!functionStack.isEmpty())
+            {
+                cout << "Error: Nested function found." << endl;
+                return false;
+            }
+
+            functionStack.push(functionName);
+        }
+
+        else if (keyword == "func_end")
+        {
+            // no func exists to match this func_end
+            if (functionStack.isEmpty())
+            {
+                cout << "Error: func_end without matching func." << endl;
+                return false;
+            }
+
+            functionStack.pop();
+        }
+    }
+
+    // a func was opened but never closed
+    if (!functionStack.isEmpty())
+    {
+        cout << "Error: func without matching func_end." << endl;
+        return false;
+    }
+
+    return true;
 }
 
 // PASS 0x1: RESOLVE() -> resolve.bin

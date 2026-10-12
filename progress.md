@@ -27,10 +27,15 @@ Project setup and preparation for Phase 01 implementation.
 - Implemented the Timeline as a custom doubly linked list.
 - Implemented snapshot recording, timeline traversal start, and step counting.
 - Tested the Stack and Timeline functions successfully.
+- Implemented Pass 0x0 helper functions for reading nonblank lines and extracting instruction words.
+- Implemented program validation for func / func_end matching.
+- Added checks for nested function declarations, unmatched func_end, missing func_end, and missing function names.
 
 ### Current Stage
-Core custom data structures completed.
+Pass 0x0 validation completed.
 
 ### Next Steps
-- Implement Pass 0x0 helper functions.
-- Implement program validation for func and func_end matching.
+- Implement Pass 0x1 resolve record writing and reading.
+- Store function names and their offsets.
+- Store pending call patches.
+- Detect missing main and undefined function calls.
