@@ -394,7 +394,7 @@ int64_t readResolveRecord(FILE *f, string &outText)
             return -1;
         }
 
-        outText += 1;
+        outText += ch;
     }
 
     return offsetField; 
@@ -440,39 +440,39 @@ int64_t resolveProgram(const char *sourcePath, const char *resolveBinPath)
         writeResolveRecord(resolveFile, recordStart, line);
         string keyword = firstWord(line);
 
-        if (keyword == "func")
-        {
-            string functionName = secondWord(line);
+if (keyword == "func")
+{
+    string functionName = secondWord(line);
 
-            if (funcCount >= MAX_FUNCS)
-            {
-                cout << "Error: Too many functions." << endl;
-                fclose(resolveFile);
-                return -1;
-            }
+    if (funcCount >= MAX_FUNCS)
+    {
+        cout << "Error: Too many functions." << endl;
+        fclose(resolveFile);
+        return -1;
+    }
 
-            funcArray[funcCount].funcName = functionName;
-            funcArray[funcCount].byteOffsetInResolveBin = recordStart;
-            funcCount++;
+    funcArray[funcCount].funcName = functionName;
+    funcArray[funcCount].byteOffsetInResolveBin = recordStart;
+    funcCount++;
 
-            if (functionName == "main")
-            {
-                mainOffset = recordStart;
-            }
-        }
-        else if (keyword == "call")
-        {
-            if (patchCount >= MAX_PATCHES)
-            {
-                cout << "Error: Too many function calls." << endl;
-                fclose(resolveFile);
-                return -1;
-            }
+    if (functionName == "main")
+    {
+        mainOffset = recordStart;
+    }
+}
+else if (keyword == "call")
+{
+    if (patchCount >= MAX_PATCHES)
+    {
+        cout << "Error: Too many function calls." << endl;
+        fclose(resolveFile);
+        return -1;
+    }
 
-            patches[patchCount].byteOffsetOfOffsetField = recordStart;
-            patches[patchCount].targetFuncName = secondWord(line);
-            patchCount++;
-        }
+    patches[patchCount].byteOffsetOfOffsetField = recordStart;
+    patches[patchCount].targetFuncName = secondWord(line);
+    patchCount++;
+}
     }
 
     // main should exist
@@ -525,18 +525,153 @@ struct Token
     string text;
 };
 
-int32_t tokenizeLine(const string &line, Token tokens[], int32_t maxTokens)
+Variable* findVariable(Frame& frame, const string& name)
+{
+    // check arguments
+    for (int i = 0; i < frame.argc; i++)
+    {
+        if (frame.argv[i].name == name)
+        {
+            return &frame.argv[i];
+        }
+    }
+
+    // check local variables
+    for (int i = 0; i < frame.localCount; i++)
+    {
+        if (frame.locals[i].name == name)
+        {
+            return &frame.locals[i];
+        }
+    }
+
+    return nullptr;
+}
+
+bool isNumber(const string& text)
+{
+    if (text == "") { return false; }
+
+    int i = 0;
+    if (text[0] == '-')
+    {
+        i = 1;
+    }
+
+    if (i >= text.length())
+    {
+        return false;
+    }
+
+    while (i < text.length())
+    {
+        if (text[i] < '0' || text[i] > '9')
+        {
+            return false;
+        }
+
+        i++;
+    }
+
+    return true;
+}
+
+bool getValue(Frame& frame, const string& text, int32_t& value)
+{
+    if (isNumber(text))
+    {
+        value = stoi(text);
+        return true;
+    }
+
+    Variable* var = findVariable(frame, text);
+    if (var == nullptr) { return false; }
+
+    value = var->value;
+    return true;
+}
+
+bool setVariable(Frame& frame, const string& name, int32_t value)
+{
+    Variable* var = findVariable(frame, name);
+
+    if (var != nullptr)
+    {
+        var->value = value;
+        return true;
+    }
+
+    if (frame.localCount >= MAX_VARS_PER_FRAME)
+    {
+        return false;
+    }
+
+    frame.locals[frame.localCount].name = name;
+    frame.locals[frame.localCount].value = value;
+    frame.localCount++;
+
+    return true;
+}
+
+int32_t tokenizeLine(const string& line, Token tokens[], int32_t maxTokens)
 {
     // first word is always a instruction keyword
     // instruction set = [func, func_end, call, set, add, sub, mul and div]
     // next word is identifier like name of a function, variable name
     // after identifier all are the params/arg, space separated
 
+    int i = 0;
+    int32_t count = 0;
+
+    while (i < line.length() && count < maxTokens)
+    {
+        // skip spaces
+        while (i < line.length() && (line[i] == ' ' || line[i] == '\t' || line[i] == '\r'))
+        {
+            i++;
+        }
+
+        if (i >= line.length())
+        {
+            break;
+        }
+
+        string word = "";
+        // read one word
+        while (i < line.length() && line[i] != ' ' && line[i] != '\t' && line[i] != '\r')
+        {
+            word += line[i];
+            i++;
+        }
+
+        tokens[count].text = word;
+        if (count == 0)
+        {
+            tokens[count].type = KEYWORD;
+        }
+        else if (count == 1)
+        {
+            tokens[count].type = IDENTIFIER;
+        }
+        else
+        {
+            tokens[count].type = PARAM;
+        }
+
+        count++;
+    }
+
+    return count;
 }
 
 Snapshot *buildSnapshot(Stack<Frame> &callStack)
 {
     // build the snapshot based on the callStack given
+    Snapshot* snapshot = new Snapshot;
+
+    snapshot->stackDepth = callStack.snapshot_into(snapshot->callStack, MAX_STACK_DEPTH);
+
+    return snapshot;
 }
 
 void executeProgram(const char *resolveBinPath, int64_t mainOffset, Timeline &timeline)
@@ -547,6 +682,224 @@ void executeProgram(const char *resolveBinPath, int64_t mainOffset, Timeline &ti
 
     // implementation:
     // execute line by line, and according to the keyword perform action
+    if (mainOffset < 0)
+    {
+        cout << "Error: Invalid main offset." << endl;
+        return;
+    }
+
+    FILE* resolveFile = fopen(resolveBinPath, "rb");
+
+    if (resolveFile == nullptr)
+    {
+        cout << "Error: Could not open resolve.bin." << endl;
+        return;
+    }
+
+    Stack<Frame> callStack;
+
+    // create Main frame
+    Frame mainFrame{};
+    mainFrame.func_name = "main";
+    mainFrame.argc = 0;
+    mainFrame.returnLine = -1;
+    mainFrame.localCount = 0;
+    callStack.push(mainFrame);
+
+    // execution starts from main
+    fseek(resolveFile, mainOffset, SEEK_SET);
+
+    while (!callStack.isEmpty())
+    {
+        int64_t recordStart = ftell(resolveFile);
+        string line;
+        int64_t offsetField = readResolveRecord(resolveFile, line);
+
+        if (offsetField == -1)
+        {
+            cout << "Error: Could not read instruction." << endl;
+            break;
+        }
+
+        Token tokens[MAX_TOKENS];
+        int32_t tokenCount = tokenizeLine(line, tokens, MAX_TOKENS);
+
+        if (tokenCount == 0)
+        {
+            continue;
+        }
+
+        string keyword = tokens[0].text;
+
+        //Func does not perform an operation itseld
+        if (keyword == "func")
+        {
+        }
+
+        // SET
+        else if (keyword == "set")
+        {
+            if (tokenCount < 3)
+            {
+                cout << "Error: Invalid set Instruction." << endl;
+                break;
+            }
+
+            Frame& currentFrame = callStack.peek();
+            int32_t value;
+
+            if (!getValue(currentFrame, tokens[2].text, value))
+            {
+                cout << "Error: Invalid value in set." << endl;
+                break;
+            }
+
+            if (!setVariable(currentFrame, tokens[1].text, value))
+            {
+                cout << "Error: Could not set variable." << endl;
+                break;
+            }
+        }
+
+        // ADD, SUB, MUL, DIV
+        else if (keyword == "add" || keyword == "sub" || keyword == "mul" || keyword == "div")
+        {
+            if (tokenCount < 3)
+            {
+                cout << "Error: Invalid arithmetic instruction" << endl;
+                break;
+            }
+
+            Frame& currentFrame = callStack.peek();
+            Variable* first = findVariable(currentFrame, tokens[1].text);
+
+            if (first == nullptr)
+            {
+                cout << "Error: Variable not found." << endl;
+                break;
+            }
+
+            int32_t secondValue;
+            if (!getValue(currentFrame, tokens[2].text, secondValue))
+            {
+                cout << "Error: Variable not found." << endl;
+                break;
+            }
+
+            if (keyword == "add")
+            {
+                first->value = first->value + secondValue;
+            }
+            else if (keyword == "sub")
+            {
+                first->value = first->value - secondValue;
+            }
+            else if (keyword == "mul")
+            {
+                first->value = first->value * secondValue;
+            }
+            else if (keyword == "div")
+            {
+                if (secondValue == 0)
+                {
+                    cout << "Error: Division by zero." << endl;
+                    break;
+                }
+
+                first->value = first->value / secondValue;
+            }
+        }
+        else if (keyword == "call")
+        {
+            int64_t targetOffset = offsetField;
+
+            // temp read called functions FUNC Line
+            fseek(resolveFile, targetOffset, SEEK_SET);
+            string funcLine;
+            readResolveRecord(resolveFile, funcLine);
+            Token funcTokens[MAX_TOKENS];
+            int32_t funcTokenCount = tokenizeLine(funcLine, funcTokens, MAX_TOKENS);
+
+            if (funcTokenCount < 2 || funcTokens[0].text != "func")
+            {
+                cout << "Error: Invalid function terget." << endl;
+                break;
+            }
+
+            int actualCount = tokenCount - 2;
+            int parameterCount = funcTokenCount - 2;
+
+            if (actualCount != parameterCount)
+            {
+                cout << "Error: Argumrnt count does not match." << endl;
+                break;
+            }
+
+            Frame newFrame{};
+            newFrame.func_name = funcTokens[1].text;
+            newFrame.argc = parameterCount;
+            newFrame.returnLine = recordStart;
+            newFrame.localCount = 0;
+            Frame& caller = callStack.peek();
+
+            for (int i = 0; i < parameterCount; i++)
+            {
+                Variable* actualVariable =
+                    findVariable(caller, tokens[i + 2].text);
+
+                if (actualVariable == nullptr)
+                {
+                    cout << "Error: Call argument not found." << endl;
+                    fclose(resolveFile);
+                    return;
+                }
+
+                newFrame.argv[i].name = funcTokens[i + 2].text;
+                newFrame.argv[i].value = actualVariable->value;
+            }
+
+            callStack.push(newFrame);
+
+            // next instruction should be called function's FUNC header
+            fseek(resolveFile, targetOffset, SEEK_SET);
+        }
+        // FUNCTION END / RETURN
+        else if (keyword == "func_end")
+        {
+            Frame finishedFrame = callStack.pop();
+
+            // ending main mean program finished
+            if (callStack.isEmpty())
+            {
+                timeline.record(buildSnapshot(callStack));
+                break;
+            }
+
+            // go back to Call instruction
+            fseek(resolveFile, finishedFrame.returnLine, SEEK_SET);
+            string callLine;
+            readResolveRecord(resolveFile, callLine);
+            Token callTokens[MAX_TOKENS];
+            int32_t callTokenCount = tokenizeLine(callLine, callTokens, MAX_TOKENS);
+            Frame& caller = callStack.peek();
+
+            // copy changed arguments back into caller
+            for (int i = 0; i < finishedFrame.argc; i++)
+            {
+                if (i + 2 < callTokenCount)
+                {
+                    setVariable(
+                        caller,
+                        callTokens[i + 2].text,
+                        finishedFrame.argv[i].value
+                    );
+                }
+            }
+        }
+        // snapshot after every executed line
+        timeline.record(buildSnapshot(callStack));
+    }
+    fclose(resolveFile);
 }
 
 // PASS 0x3: SERIALIZE TIMELINE

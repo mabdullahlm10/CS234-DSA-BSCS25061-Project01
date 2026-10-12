@@ -34,11 +34,18 @@ Project setup and preparation for Phase 01 implementation.
 - Added function offset bookkeeping and pending CALL patching.
 - Added detection for missing main and undefined function calls.
 - Verified that CALL records are patched with the correct function offsets.
+- Implemented Pass 0x2 tokenization.
+- Added helper functions for finding, reading, and updating variables inside Frames.
+- Implemented Snapshot creation from the custom call stack.
+- Implemented execution for set, add, sub, mul, and div instructions.
+- Implemented function calls using Frames on the custom Stack.
+- Implemented func_end handling and copying modified arguments back to the caller.
+- Added Timeline snapshot recording during execution.
 
 ### Current Stage
-Pass 0x1 resolve completed.
+Pass 0x2 execution implemented. Pending testing.
 
 ### Next Steps
-- Implement Pass 0x2 tokenization.
-- Build snapshots from the call stack.
-- Implement instruction execution and function calls.
+- Test Pass 0x2 using the sample C-- program
+- Fix any execution or call stack issues found during testing.
+- Impplement Pass 0x3 serialization to session.tdbg.
