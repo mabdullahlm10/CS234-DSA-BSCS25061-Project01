@@ -41,11 +41,15 @@ Project setup and preparation for Phase 01 implementation.
 - Implemented function calls using Frames on the custom Stack.
 - Implemented func_end handling and copying modified arguments back to the caller.
 - Added Timeline snapshot recording during execution.
+- Implemented Pass 0x3 serialization.
+- Completed TTDB header writing with magic bytes, version, step count, and index offset.
+- Implemented Snapshot serialization from the Timeline.
+- Implemented the dense Snapshot index using the allowed built-in vector.
+- Completed an end-to-end Windows test using a sample C-- program.
+- Successfully generated resolve.bin and session.tdbg through the complete Phase 01 pipeline.
 
 ### Current Stage
-Pass 0x2 execution implemented. Pending testing.
+Phase 01 implementation completed and tested successfully on Windows.
 
 ### Next Steps
-- Test Pass 0x2 using the sample C-- program
-- Fix any execution or call stack issues found during testing.
-- Impplement Pass 0x3 serialization to session.tdbg.
+- If the deadline is extended, test the project on Linux and resolve any portability issues to target the Windows + Linux bonus.

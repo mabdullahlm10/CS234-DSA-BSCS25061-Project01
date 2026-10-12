@@ -7,14 +7,22 @@
 //   3. Pass 0X2   -- execute resolve.bin: tokenize ONE line at a time, update the call stack, take a snapshot -> Timeline
 //   4. Pass 0X3   -- serialize Timeline -> session.tdbg(header + snapshot records + dense index)
 
+#define _CRT_SECURE_NO_WARNINGS // added due to some error on fopen
 
 #include <iostream>
+#include <vector>
 #include <string>
 #include <stdexcept>
 #include <cstdint>
 #include <fstream>
+// #include <unistd.h>
+// #include <sys/socket.h>
+
+#ifndef _WIN32
 #include <unistd.h>
 #include <sys/socket.h>
+#endif
+
 #include <cstdio>
 using namespace std;
 
@@ -196,6 +204,8 @@ void writeHeader(FILE *f, const TTDBHeader &h)
     fwrite(&h.version, sizeof(int32_t), 1, f);
 
     // placeholder for other two data members
+    fwrite(&h.stepCount, sizeof(int32_t), 1, f);
+    fwrite(&h.indexOffset, sizeof(int64_t), 1, f);
 }
 
 // resolve.bin - bookkeeping
@@ -910,6 +920,50 @@ void writeTdbg(Timeline &timeline, const char *tdbgPath)
     // placing each snapshot in the file while maintaining the index(starting point of each nth snapshot)
     // after timeline add the index array i the file
     // update the header
+    FILE* file = fopen(tdbgPath, "wb+");
+
+    if (file == nullptr)
+    {
+        cout << "Error: Could not create .tdbg file." << endl;
+        return;
+    }
+
+    TTDBHeader header;
+    header.magic[0] = 'T';
+    header.magic[1] = 'T';
+    header.magic[2] = 'D';
+    header.magic[3] = 'B';
+
+    header.version = 1;
+    header.stepCount = timeline.getStepCount();
+    header.indexOffset = 0;
+    // first wtrite header with temp indecx offset
+    writeHeader(file, header);
+    vector<int64_t> index;
+    TimelineNode* current = timeline.begin();
+
+    // write every snapshot
+    while (current != nullptr)
+    {
+        int64_t snapshotOffset = ftell(file);
+        index.push_back(snapshotOffset);
+        fwrite(current->data, sizeof(Snapshot), 1, file);
+        current = current->next;
+    }
+
+    // index start heere
+    header.indexOffset = ftell(file);
+
+    // wirte dense index
+    for (int i = 0; i < index.size(); i++)
+    {
+        fwrite(&index[i], sizeof(int64_t), 1, file);
+    }
+
+    // go back and update header
+    fseek(file, 0, SEEK_SET);
+    writeHeader(file, header);
+    fclose(file);
 }
 
 // main section
