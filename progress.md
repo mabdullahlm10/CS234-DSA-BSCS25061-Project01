@@ -18,3 +18,19 @@ Project setup and preparation for Phase 01 implementation.
 - Implement the custom Stack data structure.
 - Implement the Timeline doubly linked list.
 - Begin Pass 0x0 validation.
+
+## 12th October 2026
+
+### Current Progress
+- Implemented the custom linked-list Stack.
+- Implemented push, pop, peek, isEmpty, depth, and snapshot copying.
+- Implemented the Timeline as a custom doubly linked list.
+- Implemented snapshot recording, timeline traversal start, and step counting.
+- Tested the Stack and Timeline functions successfully.
+
+### Current Stage
+Core custom data structures completed.
+
+### Next Steps
+- Implement Pass 0x0 helper functions.
+- Implement program validation for func and func_end matching.

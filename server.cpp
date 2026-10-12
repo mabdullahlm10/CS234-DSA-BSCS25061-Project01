@@ -10,11 +10,11 @@
 
 #include <iostream>
 #include <string>
+#include <stdexcept>
 #include <cstdint>
 #include <fstream>
 #include <unistd.h>
 #include <sys/socket.h>
-#include <cstdint>
 #include <cstdio>
 using namespace std;
 
@@ -46,30 +46,63 @@ public:
     // Implement these functions:
     Stack()
     { // initialize the stack
+        top = nullptr;
+        count = 0;
     }
     void push(const T &val)
     {
 
         // pushes the value on the stack if max limit is not reached yet.
+        if (count >= MAX_STACK_DEPTH) { return; }
+        Node* newNode = new Node;
+        newNode->data = val;
+        newNode->next = top;
+
+        top = newNode;
+        count++;
     }
     T pop()
     {
         // pop the top value on the stack
+        if (isEmpty()) { throw runtime_error("Stack is empty"); }
+        Node* temp = top;
+        T value = top->data;
+        top = top->next;
+
+        delete temp;
+        count--;
+        return value;
     }
     T &peek()
     {
         // returns the top value on the stack
+        if (isEmpty()) { throw runtime_error("Stack is empty"); }
+
+        return top->data;
     }
     bool isEmpty()
     {
+        return count == 0;
     }
     int32_t depth()
     {
+        return count;
     }
     int32_t snapshot_into(T out[], int32_t maxLen)
     {
         // copies every frame, top to bottom in the array given as a parameter
         // this is what buildSnapshot() call, returns count written
+        Node* current = top;
+        int32_t copied = 0;
+
+        while (current != nullptr && copied < maxLen)
+        {
+            out[copied] = current->data;
+            current = current->next;
+            copied++;
+        }
+
+        return copied;
     }
 };
 
@@ -91,16 +124,42 @@ public:
     // Implement these functions
     Timeline()
     {
+        head = nullptr;
+        tail = nullptr;
+        stepCount = 0;
     }
+
     void record(Snapshot *s)
     {
         // add record in the timeline
+        TimelineNode* newNode = new TimelineNode;
+
+        newNode->data = s;
+        newNode->next = nullptr;
+        newNode->prev = tail;
+
+        if (head == nullptr)
+        {
+            head = newNode;
+            tail = newNode;
+        }
+        else
+        {
+            tail->next = newNode;
+            tail = newNode;
+        }
+
+        stepCount++;
     }
+
     TimelineNode *begin()
     {
+        return head;
     }
+
     int32_t getStepCount()
     {
+        return stepCount;
     }
 };
 
@@ -239,6 +298,7 @@ void writeTdbg(Timeline &timeline, const char *tdbgPath)
     // after timeline add the index array i the file
     // update the header
 }
+
 // main section
 int32_t main()
 {
@@ -258,3 +318,4 @@ int32_t main()
 
     return 0;
 }
+
