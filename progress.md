@@ -53,3 +53,25 @@ Phase 01 implementation completed and tested successfully on Windows.
 
 ### Next Steps
 - If the deadline is extended, test the project on Linux and resolve any portability issues to target the Windows + Linux bonus.
+
+## 10th November 2026
+
+### Current Progress
+- Added the Phase 02 starter files: client.cpp, load_balancer.cpp, and helper.h.
+- Implemented the custom linked list Queue for pending clients.
+- Implemented enqueue, dequeue, isEmpty, size and Queue clean up.
+- Tested the Queue successfully and verified FIFO behaviour.
+- Implemented load balancer socket send helper.
+- Implemented listen socket creation and server connection helpers.
+- Implemented server wake-up logic using system().
+- Added retry logic for connecting to the backend server after startup.
+
+### Current Stage
+Load balancer queue and basic server connectivity implemented.
+
+### Next Steps
+- Complete checksum handling.
+- Implement client relay logic.
+- Implement acceptor and dispatcher loops.
+- Implement client networking and .tdbg navigation.
+- Integrate Phase 02 networking with the Phase 01 server.

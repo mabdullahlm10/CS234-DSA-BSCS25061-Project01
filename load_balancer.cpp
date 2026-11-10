@@ -154,24 +154,102 @@ bool sendAll(int sock, const char *buf, size_t n)
 {
     // Reply format: [status: 1 byte][sending_material][checksum: 4 bytes].
     // send() may send fewer bytes than asked for, so keep calling it until all n bytes are sent.
-    
+
+    size_t totalSent = 0;
+    while (totalSent < n)
+    {
+        ssize_t sent = send(sock, buf + totalSent, n - totalSent, MSG_NOSIGNAL);
+
+        if (sent <= 0) { return false; }
+        totalSent += sent;
+    }
+
+    return true;
 }
+
 bool sendError(int sock, const string &message)
 {
     // Reply format: [status: 1 byte][payload until close][checksum: 4 bytes].
     // For an error: send one byte with value 1, then the message text. 
+
+    char status = 1;
+    if (!sendAll(sock, &status, 1)) { return false; }
+
+    if (!sendAll(sock, message.c_str(), message.length())) { return false; }
+    
+    return true;
 }
+
 int createListenSocket(int port)
 { 
     // Create a TCP socket with SOCK_CLOEXEC(flag).
     // set SO_REUSEADDR so we can restart the load balancer right away.
     // bind() to the port on any address, then listen(LISTEN_BACKLOG).
     // If bind or listen fails, print the error and exit, because without this socket we cannot work.
+
+    int listenSock = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+
+    if (listenSock < 0)
+    {
+        cout << "Error: Could not create listen socket." << endl;
+        exit(1);
+    }
+
+    int option = 1;
+    if (setsockopt(listenSock, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0)
+    {
+        cout << "Error: Could not set socket options." << endl;
+        close(listenSock);
+        exit(1);
+    }
+
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(port);
+
+    if (bind(listenSock, (sockaddr*)& address, sizeof(address)) < 0)
+    {
+        cout << "Error: Could not bind socket." << endl;
+        close(listenSock);
+        exit(1);
+    }
+
+    if(listen(listenSock, LISTEN_BACKLOG) < 0)
+    {
+        cout << "Error: Could not listen on socket." << endl;
+        close(listenSock);
+        exit(1);
+    }
+
+    return listenSock;
 }
+
 int connectToServer(const char *host, int port)
 {
     // Create a TCP socket (SOCK_CLOEXEC) and connect it to host:port.
     // Return the socket, or -1 if the connection fails 
+    int sock = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+
+    if (sock < 0) { return -1; }
+
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(port);
+
+    if (inet_pton(AF_INET, host, &address.sin_addr) <= 0)
+    {
+        close(sock);
+        return -1;
+    }
+
+    if (connect(sock, (sockaddr*)& address, sizeof(address)) < 0)
+    {
+        close(sock);
+        return -1;
+    }
+
+    return sock;
 }
 
 // =============================================================================================
@@ -185,13 +263,39 @@ bool startServer(int port)
     //   Example: "./server 5001 &"
     // Call system() with it.
     // Return true if system() returned 0, otherwise false.
+
+    string command = string(SERVER_PATH) + " " + to_string(port) + " &";
+    int result = system(command.c_str());
+
+    return result == 0;
 }
+
 int connectToServerWithWakeup()
 {
     // 1. Try connectToServer(). If it works, return that socket. The server is alive.
     // 2. Otherwise call startServer(). If it fails, return -1.
     // 3. Try connectToServer() up to STARTUP_MAX_ATTEMPTS times 
     // 4. Return the first working socket, or -1 if the server never came up.
+
+    int sock = connectToServer(serverHost.c_str(), serverPort);
+
+    // server is already running
+    if (sock >= 0) { return sock; }
+
+    // server is down starting it 
+    if (!startServer(serverPort)) { return -1; }
+
+    // give chances to server to start
+    for (int i = 0; i < STARTUP_MAX_ATTEMPTS; i++)
+    {
+        usleep(STARTUP_POLL_INTERVAL_MS * 1000);
+
+        sock = connectToServer(serverHost.c_str(), serverPort);
+
+        if (sock >= 0) { return sock; }
+    }
+
+    return -1;
 }
 
 
