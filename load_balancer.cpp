@@ -36,6 +36,7 @@
 #include <arpa/inet.h>
 #include "helper.h"
 using namespace std;
+#include <stdexcept>
 
 
 // ---- Constants ----
@@ -68,27 +69,69 @@ public:
     // Implement these functions:
     Queue()
     {
-
+        front = nullptr;
+        rear = nullptr;
+        count = 0;
     }
+
     ~Queue()
     {
-
+        while(!isEmpty())
+        {
+            dequeue();
+        }
     }
+
     void enqueue(const T &val)
     {
+        Node* newNode = new Node;
+        newNode->data = val;
+        newNode->next = nullptr;
 
+        if (rear == nullptr)
+        {
+            front = newNode;
+            rear = newNode;
+        }
+        else
+        {
+            rear->next = newNode;
+            rear = newNode;
+        }
+
+        count++;
     }
+
     T dequeue()
     {
+        if (isEmpty())
+        {
+            throw runtime_error("Queue is empty");
+        }
 
+        Node* temp = front;
+        T value = front->data;
+        front = front->next;
+
+        if (front == nullptr)
+        {
+            rear = nullptr;
+        }
+
+        delete temp;
+        count--;
+
+        return value;
     }
+
     bool isEmpty()
     {
-        
+        return count == 0;
     }
+
     int size()
     {
-
+        return count;
     }
 };
 
@@ -205,5 +248,6 @@ int main(int argc, char *argv[])
     // 2. listenSock = createListenSocket(LB_PORT).
     // 3. Start a thread that runs acceptLoop(listenSock) and detach it.
     // 4. Call dispatcherLoop().
+
     return 0;
 }
